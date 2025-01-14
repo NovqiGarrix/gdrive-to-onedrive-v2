@@ -1,0 +1,73 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#applications/$entity",
+  "addIns": [],
+  "api": {
+    "acceptMappedClaims": null,
+    "knownClientApplications": [],
+    "oauth2PermissionScopes": [],
+    "preAuthorizedApplications": [],
+    "requestedAccessTokenVersion": null
+  },
+  "appId": "36140e09-f9f7-4c01-90fc-6288cf9217ca",
+  "appRoles": [],
+  "applicationTemplateId": null,
+  "certification": null,
+  "createdDateTime": "2025-01-14T14:22:05.2102041Z",
+  "defaultRedirectUri": null,
+  "deletedDateTime": null,
+  "description": null,
+  "disabledByMicrosoftStatus": null,
+  "displayName": "Gdrive-to-Onedrive",
+  "groupMembershipClaims": null,
+  "id": "ec7ee561-fe1f-46bd-b2a5-fcecdc20a099",
+  "identifierUris": [],
+  "info": {
+    "logoUrl": null,
+    "marketingUrl": null,
+    "privacyStatementUrl": null,
+    "supportUrl": null,
+    "termsOfServiceUrl": null
+  },
+  "isDeviceOnlyAuthSupported": null,
+  "isFallbackPublicClient": null,
+  "keyCredentials": [],
+  "nativeAuthenticationApisEnabled": null,
+  "notes": null,
+  "optionalClaims": null,
+  "parentalControlSettings": {
+    "countriesBlockedForMinors": [],
+    "legalAgeGroupRule": "Allow"
+  },
+  "passwordCredentials": [],
+  "publicClient": {
+    "redirectUris": []
+  },
+  "publisherDomain": "ypt.or.id",
+  "requestSignatureVerification": null,
+  "requiredResourceAccess": [],
+  "samlMetadataUrl": null,
+  "serviceManagementReference": null,
+  "servicePrincipalLockConfiguration": null,
+  "signInAudience": "AzureADMyOrg",
+  "spa": {
+    "redirectUris": []
+  },
+  "tags": [],
+  "tokenEncryptionKeyId": null,
+  "uniqueName": null,
+  "verifiedPublisher": {
+    "addedDateTime": null,
+    "displayName": null,
+    "verifiedPublisherId": null
+  },
+  "web": {
+    "homePageUrl": null,
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": false,
+      "enableIdTokenIssuance": false
+    },
+    "logoutUrl": null,
+    "redirectUriSettings": [],
+    "redirectUris": []
+  }
+}

@@ -1,10 +1,12 @@
 import { Hono } from "@hono/hono";
+import type { User } from '@microsoft/microsoft-graph-types';
+import { google } from "googleapis";
+import { REDIS_GOOGLE_TOKEN_KEY, REDIS_MICROSOFT_TOKEN_KEY } from "../constant.ts";
+import { MyError } from "../exceptions/MyError.ts";
+import { getMicrosoftToken, microsoftClient } from "../lib/microsoft.ts";
+import { ensureGoogleTokenMiddleware } from "../middlewares/auth.middleware.ts";
 import { googleTokenSchema } from '../schema.ts';
 import { Bindings } from "../types.ts";
-import { REDIS_GOOGLE_TOKEN_KEY } from "../constant.ts";
-import { MyError } from "../exceptions/MyError.ts";
-import { google } from "googleapis";
-import { ensureGoogleTokenMiddleware } from "../middlewares/auth.middleware.ts";
 
 const auth = new Hono<{ Bindings: Bindings }>();
 
@@ -67,6 +69,51 @@ auth.get('/google/callback', async (c) => {
     }
 
     return c.json({ status: "OK" }, 200);
+});
+
+auth.get('/microsoft/me', async (c) => {
+
+    if (c.env.vars.ENV === 'production') {
+        return new MyError()
+            .forbidden('This endpoint is only for development')
+            .toJSON(c.json);
+    }
+
+    try {
+        const me: User = await microsoftClient.api('/me').get();
+
+        return c.json({ status: "OK", data: me.displayName });
+    } catch (error) {
+        console.error(`Failed to get microsoft/me`, error);
+        return new MyError()
+            .internalServerError('Microsoft token is not properly')
+            .toJSON(c.json);
+    }
+
+});
+
+auth.get('/microsoft/callback', async (c) => {
+
+    const code = c.req.query('code');
+
+    if (!code) {
+        return new MyError()
+            .badRequest('Missing code')
+            .toJSON(c.json);
+    }
+
+    const { access_token, expires_in, token_type, scope, refresh_token } = await getMicrosoftToken(code, false);
+
+    await c.env.redis.set(REDIS_MICROSOFT_TOKEN_KEY, JSON.stringify({
+        accessToken: access_token,
+        expiresIn: expires_in,
+        tokenType: token_type,
+        scope,
+        ...(refresh_token ? { refreshToken: refresh_token } : {}),
+    }));
+
+    return c.json({ status: "OK" });
+
 });
 
 export default auth;

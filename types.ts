@@ -7,3 +7,9 @@ export interface Bindings {
     redis: Redis;
     vars: Env;
 };
+
+export interface MicrosoftToken {
+    access_token: string;
+    refresh_token: string;
+    expiry_date: number;
+}

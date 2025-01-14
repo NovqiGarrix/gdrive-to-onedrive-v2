@@ -1,10 +1,10 @@
 import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
 import { logger } from '@hono/hono/logger';
+import env from "./config/env.ts";
 import authRoutes from "./routes/auth.routes.ts";
 import { Bindings } from "./types.ts";
 import { getRedisClient, oauth } from "./utils.ts";
-import env from "./config/env.ts";
 
 function getGoogleCallbackURL() {
 
@@ -18,6 +18,18 @@ function getGoogleCallbackURL() {
         ],
     });
 
+}
+
+function getMicrosoftCallbackURL() {
+    const url = new URL(`https://login.microsoftonline.com/${env.MICROSOFT_TENANT_ID}/oauth2/v2.0/authorize`);
+
+    url.searchParams.set('client_id', env.MICROSOFT_CLIENT_ID);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('redirect_uri', `${env.BASE_URL}/auth/microsoft/callback`);
+    url.searchParams.set('response_mode', 'query');
+    url.searchParams.set('scope', 'openid offline_access profile User.Read Files.ReadWrite');
+
+    return url.toString();
 }
 
 const redis = await getRedisClient();
@@ -46,6 +58,10 @@ function main() {
     app.route('/auth', authRoutes);
 
     console.log(`Google OAuth URL: ${getGoogleCallbackURL()}`);
+    console.log('-----------------------------------');
+    console.log(`Microsoft OAuth URL: ${getMicrosoftCallbackURL()}`);
+    console.log('-----------------------------------');
+
     Deno.serve({
         port: 4000,
         onListen({ port }) {
