@@ -1,0 +1,1 @@
+export const REDIS_GOOGLE_TOKEN_KEY = 'google:token';
