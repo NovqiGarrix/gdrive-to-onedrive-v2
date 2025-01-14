@@ -5,7 +5,6 @@ import { z } from 'zod';
 const envSchema = z.object({
     GOOGLE_CLIENT_ID: z.string(),
     GOOGLE_CLIENT_SECRET: z.string(),
-    GOOGLE_REDIRECT_URL: z.string().default('http://localhost:4000/auth/google/callback'),
 
     MICROSOFT_CLIENT_ID: z.string(),
     MICROSOFT_CLIENT_SECRET: z.string(),

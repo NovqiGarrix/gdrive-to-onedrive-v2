@@ -16,6 +16,7 @@ function getGoogleCallbackURL() {
             'https://www.googleapis.com/auth/userinfo.profile',
             'https://www.googleapis.com/auth/drive',
         ],
+        redirect_uri: `${env.BASE_URL}/auth/google/callback`
     });
 
 }
