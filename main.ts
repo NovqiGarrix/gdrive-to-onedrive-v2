@@ -35,6 +35,7 @@ function getMicrosoftCallbackURL() {
 
 const redis = await getRedisClient();
 
+// deno-lint-ignore no-unused-vars
 function main() {
 
     const app = new Hono<{ Bindings: Bindings }>();
@@ -74,8 +75,10 @@ function main() {
 
 Deno.addSignalListener('SIGINT', async () => {
     console.log('SIGINT received');
-    await redis.quit();
+    if (redis.status === "connect") {
+        await redis.quit();
+    }
     Deno.exit(0);
 });
 
-main();
+// main();

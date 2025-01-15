@@ -69,13 +69,19 @@ const microsoftTokenSchema = z.object({
     tokenType: z.string()
 });
 
-class MicrosoftAuthenticationProvider implements AuthenticationProvider {
+export class MicrosoftAuthenticationProvider implements AuthenticationProvider {
 
     // @ts-expect-error - Not assigned yet
     redisClient: Redis = null;
 
     accessToken: string = '';
     expiryDate: number = 0;
+
+    constructor(redis?: Redis) {
+        if (redis) {
+            this.redisClient = redis;
+        }
+    }
 
     private async ensureRedisClient() {
         if (!this.redisClient) {
