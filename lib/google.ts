@@ -68,7 +68,7 @@ async function getParent(fileId: string, _paths: string[] = []) {
     const paths = [..._paths];
 
     if (!fileId) {
-        return paths.join('/');
+        return paths.reverse().join('/');
     }
 
     const file = await drive.files.get({
@@ -78,10 +78,11 @@ async function getParent(fileId: string, _paths: string[] = []) {
     });
 
     const { parents, name } = file.data;
+
     const parentId = parents?.at(0)!;
 
     if (name === "My Drive") {
-        return paths.join('/');
+        return paths.reverse().join('/');
     }
 
     paths.push(name!);
@@ -89,7 +90,6 @@ async function getParent(fileId: string, _paths: string[] = []) {
 }
 
 async function getParentPath(fileId: string): Promise<string> {
-    await ensureToken();
 
     const file = await drive.files.get({
         auth: oauth,
@@ -105,6 +105,63 @@ async function getParentPath(fileId: string): Promise<string> {
     return parentPath;
 }
 
+const ONEDRIVE_PARENT_ID = '01COHAPYWLQJ3QKRKXABB27U6DVV6YQYAC';
+const GOOGLE_DRIVE_PARENT_ID = '0AAI4RCCtKABSUk9PVA';
+
+async function checkIfFileExists(filename: string, googleParentId?: string) {
+
+    let parentPath: string | null = null;
+
+    if (googleParentId) {
+        parentPath = await getParent(googleParentId);
+    }
+
+    let parentId = ONEDRIVE_PARENT_ID;
+
+    if (parentPath) {
+        // Find the id of the parent folder
+        // https://graph.microsoft.com/v1.0/me/drive/root:/novqigarrixdev
+
+        const resp = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/novqigarrixdev/${parentPath}`, {
+            headers: {
+                Authorization: `Bearer ${await microsoftClient.getAccessToken()}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!resp.ok) {
+            if (resp.status === 404) {
+                return false;
+            }
+
+            throw new Error('Failed to get parent folder id');
+        }
+
+        const { id } = await resp.json();
+        console.log(`Got parent id: ${id}`);
+        parentId = id;
+    }
+
+    const url = new URL(`https://graph.microsoft.com/v1.0/me/drive/items/${parentId}/children`);
+    url.searchParams.set('select', 'name');
+    const resp = await fetch(url, {
+        headers: {
+            Authorization: `Bearer ${await microsoftClient.getAccessToken()}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+        throw new Error(data.error_description);
+    }
+
+    const { value }: { value: Array<{ name: string }> } = data;
+    return value.some((v) => v.name === filename);
+
+}
+
 async function transfer(fileId: string, deleteToo: boolean = false) {
 
     const file = await drive.files.get({
@@ -113,7 +170,13 @@ async function transfer(fileId: string, deleteToo: boolean = false) {
         fields: 'parents, name, webContentLink, size'
     });
 
-    const { name, webContentLink } = file.data;
+    const { name, webContentLink, parents } = file.data;
+    const insideFolder = parents?.at(0) !== GOOGLE_DRIVE_PARENT_ID;
+
+    if (await checkIfFileExists(name!, insideFolder ? parents?.at(0)! : undefined)) {
+        console.log(`-------- ${name} ALREADY EXISTS --------`);
+        return;
+    }
 
     const parentPath = await getParentPath(fileId);
 
@@ -150,13 +213,14 @@ async function transferFiles() {
 
     try {
 
-        await ensureToken();
-
         let driveFiles = await google.drive("v3").files.list({
             auth: oauth,
             pageSize: 10,
             fields: 'nextPageToken, files(id, name)',
             q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false",
+            supportsAllDrives: true,
+            corpora: 'allDrives',
+            includeItemsFromAllDrives: true
         });
 
         while (driveFiles.data.nextPageToken) {
@@ -174,7 +238,10 @@ async function transferFiles() {
                 pageSize: 10,
                 fields: 'nextPageToken, files(name, id, webContentLink)',
                 q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false",
-                pageToken: driveFiles.data.nextPageToken
+                pageToken: driveFiles.data.nextPageToken,
+                supportsAllDrives: true,
+                corpora: 'allDrives',
+                includeItemsFromAllDrives: true,
             });
         }
 
@@ -186,18 +253,19 @@ async function transferFiles() {
 
 }
 
+// Make sure only run this if the 
+// file is run directly (not imported)
 if (import.meta.main) {
+    await ensureToken();
     await transferFiles();
 
     // await list();
     // await download('https://drive.google.com/uc?id=1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao&export=download');
     // console.log(await getParentPath('1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao'));
     // await getParentPath('0AAI4RCCtKABSUk9PVA');
+
+    Deno.exit(0);
 }
-
-
-
-Deno.exit(0);
 
 export default {
     ensureToken
