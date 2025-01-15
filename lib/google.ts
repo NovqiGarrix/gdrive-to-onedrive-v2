@@ -67,6 +67,10 @@ async function ensureToken() {
 async function getParent(fileId: string, _paths: string[] = []) {
     const paths = [..._paths];
 
+    if (!fileId) {
+        return paths.join('/');
+    }
+
     const file = await drive.files.get({
         auth: oauth,
         fileId,
