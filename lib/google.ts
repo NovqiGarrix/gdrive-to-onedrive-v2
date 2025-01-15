@@ -170,6 +170,7 @@ async function transferFiles() {
                 pageSize: 10,
                 fields: 'nextPageToken, files(name, id, webContentLink)',
                 q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false",
+                pageToken: driveFiles.data.nextPageToken
             });
         }
 
