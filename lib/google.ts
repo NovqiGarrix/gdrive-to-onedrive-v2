@@ -6,6 +6,8 @@ import { getRedisClient, oauth } from "../utils.ts";
 import { MicrosoftAuthenticationProvider } from "./microsoft.ts";
 import onedrive from "./onedrive.ts";
 
+const ROOT_FOLDER_NAME = 'novrianto254v2';
+
 const drive = google.drive("v3");
 
 const redis = await getRedisClient();
@@ -120,9 +122,9 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
 
     if (parentPath) {
         // Find the id of the parent folder
-        // https://graph.microsoft.com/v1.0/me/drive/root:/novqigarrixdev
+        // https://graph.microsoft.com/v1.0/me/drive/root:/${ROOT_FOLDER_NAME}
 
-        const resp = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/novqigarrixdev/${parentPath}`, {
+        const resp = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${ROOT_FOLDER_NAME}/${parentPath}`, {
             headers: {
                 Authorization: `Bearer ${await microsoftClient.getAccessToken()}`,
                 'Content-Type': 'application/json'
@@ -162,15 +164,21 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
 
 }
 
-async function transfer(fileId: string, deleteToo: boolean = false) {
+interface TransferParams {
+    file: {
+        id: string;
+        name: string;
+        webContentLink: string;
+        parents: string[];
+    }
+    deleteToo?: boolean;
+}
 
-    const file = await drive.files.get({
-        auth: oauth,
-        fileId,
-        fields: 'parents, name, webContentLink, size'
-    });
+async function transfer(params: TransferParams) {
 
-    const { name, webContentLink, parents } = file.data;
+    const { file, deleteToo = false } = params;
+
+    const { id, name, webContentLink, parents } = file;
     const insideFolder = parents?.at(0) !== GOOGLE_DRIVE_PARENT_ID;
 
     if (await checkIfFileExists(name!, insideFolder ? parents?.at(0)! : undefined)) {
@@ -178,7 +186,7 @@ async function transfer(fileId: string, deleteToo: boolean = false) {
         return;
     }
 
-    const parentPath = await getParentPath(fileId);
+    const parentPath = await getParentPath(id);
 
     const res = await oauth.request<NodeJS.ReadableStream>({
         method: 'GET',
@@ -189,18 +197,15 @@ async function transfer(fileId: string, deleteToo: boolean = false) {
     const g = await onedrive.items.uploadSimple({
         accessToken: await microsoftClient.getAccessToken(),
         filename: name!,
-        parentPath: `novqigarrixdev/${parentPath}`,
-        readableStream: res.data,
-        // fileSize: Number(size!),
-        // conflictBehavior: 'replace',
-        // chunksToUpload: 50,
+        parentPath: `${ROOT_FOLDER_NAME}/${parentPath}`,
+        readableStream: res.data
     });
 
     if (deleteToo) {
         console.log(`-------- DELETING ${name} --------`);
         await drive.files.delete({
             auth: oauth,
-            fileId,
+            fileId: id,
         });
         console.log(`-------- ${name} DELETED --------`);
     }
@@ -209,15 +214,17 @@ async function transfer(fileId: string, deleteToo: boolean = false) {
 
 }
 
+const PAGE_SIZE = 50;
+
 async function transferFiles() {
 
     try {
 
         let driveFiles = await google.drive("v3").files.list({
             auth: oauth,
-            pageSize: 10,
-            fields: 'nextPageToken, files(id, name)',
-            q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false",
+            pageSize: PAGE_SIZE,
+            fields: 'nextPageToken, files(name, id, webContentLink, parents)',
+            q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false and not mimeType contains 'application/vnd.google-apps'",
             supportsAllDrives: true,
             corpora: 'allDrives',
             includeItemsFromAllDrives: true
@@ -228,16 +235,23 @@ async function transferFiles() {
 
             for await (const file of files!) {
                 console.log(`----- UPLOADING ${file.name}... ------`);
-                await transfer(file.id!);
+                await transfer({
+                    file: {
+                        id: file.id!,
+                        name: file.name!,
+                        webContentLink: file.webContentLink!,
+                        parents: file.parents!
+                    }
+                });
                 console.log(`------ ${file.name} UPLOADED -------`);
             }
 
             console.log('GETTING ANOTHER FILES....');
             driveFiles = await google.drive("v3").files.list({
                 auth: oauth,
-                pageSize: 10,
-                fields: 'nextPageToken, files(name, id, webContentLink)',
-                q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false",
+                pageSize: PAGE_SIZE,
+                fields: 'nextPageToken, files(name, id, webContentLink, parents)',
+                q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false and not mimeType contains 'application/vnd.google-apps'",
                 pageToken: driveFiles.data.nextPageToken,
                 supportsAllDrives: true,
                 corpora: 'allDrives',
