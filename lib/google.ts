@@ -215,7 +215,7 @@ async function transfer(params: TransferParams) {
 
     const parentPath = await getParentPath(id);
 
-    const res = await oauth.request<NodeJS.ReadableStream>({
+    const res = await oauth.request({
         method: 'GET',
         url: webContentLink!,
         responseType: 'stream'
@@ -366,7 +366,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
             const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
             // console.log(item.isPhoto, item.filename);
 
-            const readableStream = await oauth.request<NodeJS.ReadableStream>({
+            const readableStream = await oauth.request({
                 method: 'GET',
                 url: downloadUrl,
                 responseType: 'stream',

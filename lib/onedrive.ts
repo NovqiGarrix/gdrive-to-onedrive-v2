@@ -20,13 +20,13 @@ type CreateFolderParams = {
 type CreateFolderFn = (params: CreateFolderParams) => Promise<DriveItem>;
 
 type UploadSimpleParams = {
-    readableStream: NodeJS.ReadableStream,
+    readableStream: any,
     filename: string
 } & AccessToken & DriveSpecification & ParentSpecification
 type UploadSimpleFn = (params: UploadSimpleParams) => Promise<DriveItem>;
 
 type UploadSessionParams = {
-    readableStream: NodeJS.ReadableStream,
+    readableStream: any,
     filename: string,
     fileSize: number,
     chunksToUpload?: number,
@@ -46,13 +46,13 @@ type GetMetadataFn = (params: GetMetadataParams) => Promise<DriveItem>;
 type DownloadParams = {
     format?: "glb" | "html" | "jpg" | "pdf"
 } & AccessToken & DriveSpecification & ItemSpecifiation;
-type DownloadFn = (params: DownloadParams) => Promise<NodeJS.ReadableStream>
+type DownloadFn = (params: DownloadParams) => Promise<any>
 
 type PartialDownloadParams = {
     bytesFrom?: number,
     bytesTo: number
 } & AccessToken & DriveSpecification & (ItemSpecifiation | { graphDownloadURL: string });
-type PartialDownloadFn = (params: PartialDownloadParams) => Promise<NodeJS.ReadableStream>
+type PartialDownloadFn = (params: PartialDownloadParams) => Promise<any>
 
 type SyncParams = {
     next?: string
