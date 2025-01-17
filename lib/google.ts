@@ -338,7 +338,7 @@ const googlePhotosMediaItemsResponseSchema = z.object({
 async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     const url = new URL('https://photoslibrary.googleapis.com/v1/mediaItems');
-    url.searchParams.set('pageSize', '30');
+    url.searchParams.set('pageSize', '10');
     if (_nextPageToken) {
         url.searchParams.set('pageToken', _nextPageToken);
     }
@@ -357,28 +357,30 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
     const googlePhotosMediaItemsResponse = googlePhotosMediaItemsResponseSchema.parse(await filesResp.json());
     const { mediaItems, nextPageToken } = googlePhotosMediaItemsResponse;
 
-    for await (const item of mediaItems) {
-        console.log(`------ UPLOADING ${item.filename}... ------`);
+    await Promise.all(
+        mediaItems.map(async (item) => {
+            console.log(`------ UPLOADING ${item.filename}... ------`);
 
-        // The 'd' parameter is used to tell Google
-        // that we want to download the file (not viewing it)
-        const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
-        // console.log(item.isPhoto, item.filename);
+            // The 'd' parameter is used to tell Google
+            // that we want to download the file (not viewing it)
+            const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
+            // console.log(item.isPhoto, item.filename);
 
-        const readableStream = await oauth.request<NodeJS.ReadableStream>({
-            method: 'GET',
-            url: downloadUrl,
-            responseType: 'stream',
-        });
+            const readableStream = await oauth.request<NodeJS.ReadableStream>({
+                method: 'GET',
+                url: downloadUrl,
+                responseType: 'stream',
+            });
 
-        await onedrive.items.uploadSimple({
-            readableStream: readableStream.data,
-            accessToken: await microsoftClient.getAccessToken(),
-            filename: item.filename,
-            parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
-        });
-        console.log(`------ ${item.filename} UPLOADED ------`);
-    }
+            await onedrive.items.uploadSimple({
+                readableStream: readableStream.data,
+                accessToken: await microsoftClient.getAccessToken(),
+                filename: item.filename,
+                parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+            });
+            console.log(`------ ${item.filename} UPLOADED ------`);
+        })
+    );
 
     if (!nextPageToken) {
         return;
