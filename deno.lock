@@ -2,9 +2,12 @@
   "version": "4",
   "specifiers": {
     "jsr:@hono/hono@^4.6.16": "4.6.16",
+    "jsr:@std/assert@1": "1.0.10",
     "jsr:@std/dotenv@~0.225.3": "0.225.3",
+    "jsr:@std/internal@^1.0.5": "1.0.5",
     "npm:@microsoft/microsoft-graph-client@^3.0.7": "3.0.7",
     "npm:@microsoft/microsoft-graph-types@^2.40.0": "2.40.0",
+    "npm:googleapis-common@^7.2.0": "7.2.0",
     "npm:googleapis@144": "144.0.0",
     "npm:ioredis@^5.4.2": "5.4.2",
     "npm:onedrive-api@^1.1.1": "1.1.1",
@@ -14,8 +17,17 @@
     "@hono/hono@4.6.16": {
       "integrity": "b540c6b1352d73142895f7bb6bfd0b6cc514ede61c12940338c4ae5dd06cb326"
     },
+    "@std/assert@1.0.10": {
+      "integrity": "59b5cbac5bd55459a19045d95cc7c2ff787b4f8527c0dd195078ff6f9481fbb3",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
     "@std/dotenv@0.225.3": {
       "integrity": "a95e5b812c27b0854c52acbae215856d9cce9d4bbf774d938c51d212711e8d4a"
+    },
+    "@std/internal@1.0.5": {
+      "integrity": "54a546004f769c1ac9e025abd15a76b6671ddc9687e2313b67376125650dc7ba"
     }
   },
   "npm": {

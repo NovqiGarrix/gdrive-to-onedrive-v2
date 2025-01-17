@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-unused-vars
 import { drive_v3, google } from "googleapis";
 import env from "../config/env.ts";
 import { REDIS_GOOGLE_TOKEN_KEY } from "../constant.ts";
@@ -6,10 +7,12 @@ import { googleTokenSchema } from "../schema.ts";
 import { getRedisClient, oauth } from "../utils.ts";
 import { MicrosoftAuthenticationProvider } from "./microsoft.ts";
 import onedrive from "./onedrive.ts";
+import { z } from "zod";
 
 const ROOT_FOLDER_NAME = 'novrianto254v2';
 
 const drive = google.drive("v3");
+// const oauth2 = getAPI('oauth')
 
 const redis = await getRedisClient();
 const microsoftClient = new MicrosoftAuthenticationProvider(redis);
@@ -258,7 +261,6 @@ async function transferFiles(ownerEmail: string) {
         });
 
         let leftOver = driveFiles.data.files?.length!;
-        // console.log(driveFiles.data.files?.length);
 
         while (driveFiles.data.nextPageToken || leftOver > 0) {
             const { data: { files } } = driveFiles;
@@ -309,11 +311,90 @@ async function transferFiles(ownerEmail: string) {
 
 }
 
+const mediaItemSchema = z.object({
+    id: z.string(),
+    filename: z.string(),
+    baseUrl: z.string(),
+    mediaMetadata: z.object({
+        photo: z.object({}).optional(),
+        video: z.object({}).optional()
+    })
+}).transform((data) => {
+    const { mediaMetadata, ...res } = data;
+
+    return {
+        ...res,
+        isPhoto: !!mediaMetadata.photo,
+    }
+});
+
+const mediaItemsSchema = z.array(mediaItemSchema);
+
+const googlePhotosMediaItemsResponseSchema = z.object({
+    mediaItems: mediaItemsSchema,
+    nextPageToken: z.string().optional()
+});
+
+async function transferFromGooglePhotos(_nextPageToken?: string) {
+
+    const url = new URL('https://photoslibrary.googleapis.com/v1/mediaItems');
+    url.searchParams.set('pageSize', '30');
+    if (_nextPageToken) {
+        url.searchParams.set('pageToken', _nextPageToken);
+    }
+
+    const filesResp = await fetch(url, {
+        headers: {
+            Authorization: `Bearer ${oauth.credentials.access_token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    if (!filesResp.ok) {
+        throw new Error('Failed to get files');
+    }
+
+    const googlePhotosMediaItemsResponse = googlePhotosMediaItemsResponseSchema.parse(await filesResp.json());
+    const { mediaItems, nextPageToken } = googlePhotosMediaItemsResponse;
+
+    for await (const item of mediaItems) {
+        console.log(`------ UPLOADING ${item.filename}... ------`);
+
+        // The 'd' parameter is used to tell Google
+        // that we want to download the file (not viewing it)
+        const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
+        // console.log(item.isPhoto, item.filename);
+
+        const readableStream = await oauth.request<NodeJS.ReadableStream>({
+            method: 'GET',
+            url: downloadUrl,
+            responseType: 'stream',
+        });
+
+        await onedrive.items.uploadSimple({
+            readableStream: readableStream.data,
+            accessToken: await microsoftClient.getAccessToken(),
+            filename: item.filename,
+            parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+        });
+        console.log(`------ ${item.filename} UPLOADED ------`);
+    }
+
+    if (!nextPageToken) {
+        return;
+    }
+
+    console.log(`------ GETTING ANOTHER FILES... ------`);
+    return transferFromGooglePhotos(nextPageToken);
+
+}
+
 // Make sure only run this if the 
 // file is run directly (not imported)
 if (import.meta.main) {
     const profile = await ensureToken();
-    await transferFiles(profile.email!);
+    // await transferFiles(profile.email!);
+    await transferFromGooglePhotos();
 
     // await list();
     // await download('https://drive.google.com/uc?id=1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao&export=download');
