@@ -12,6 +12,7 @@ const envSchema = z.object({
 
     ENV: z.enum(['development', 'production']).default('development'),
     BASE_URL: z.string().default('http://localhost:4000'),
+    DELETE_AFTER_TRANSFER: z.string().default('false').transform((v) => v === 'true'),
 
     REDIS_HOSTNAME: z.string(),
     REDIS_PORT: z.string().transform((port) => Number(port)),

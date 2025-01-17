@@ -1,4 +1,5 @@
-import { google } from "googleapis";
+import { drive_v3, google } from "googleapis";
+import env from "../config/env.ts";
 import { REDIS_GOOGLE_TOKEN_KEY } from "../constant.ts";
 import { MyError } from "../exceptions/MyError.ts";
 import { googleTokenSchema } from "../schema.ts";
@@ -64,6 +65,12 @@ async function ensureToken() {
             token_type: 'Bearer',
         });
     }
+
+    const profile = await google.oauth2("v2")
+        .userinfo.get({ auth: oauth });
+
+    return profile.data;
+
 }
 
 async function getParent(fileId: string, _paths: string[] = []) {
@@ -170,19 +177,36 @@ interface TransferParams {
         name: string;
         webContentLink: string;
         parents: string[];
+        permissions: drive_v3.Schema$File["permissions"];
     }
     deleteToo?: boolean;
+    ownerEmail: string;
 }
 
 async function transfer(params: TransferParams) {
 
-    const { file, deleteToo = false } = params;
+    const { file, deleteToo = false, ownerEmail } = params;
 
-    const { id, name, webContentLink, parents } = file;
+    const { id, name, webContentLink, parents, permissions } = file;
     const insideFolder = parents?.at(0) !== GOOGLE_DRIVE_PARENT_ID;
+    const isOwned = !!(permissions && permissions.find((permission) => permission.role === "owner" && permission.emailAddress === ownerEmail));
 
     if (await checkIfFileExists(name!, insideFolder ? parents?.at(0)! : undefined)) {
         console.log(`-------- ${name} ALREADY EXISTS --------`);
+
+        if (deleteToo) {
+            if (!isOwned) {
+                return;
+            }
+
+            console.log(`-------- DELETING ${name} --------`);
+            await drive.files.delete({
+                auth: oauth,
+                fileId: id,
+            });
+            console.log(`-------- ${name} DELETED --------`);
+        }
+
         return;
     }
 
@@ -202,6 +226,10 @@ async function transfer(params: TransferParams) {
     });
 
     if (deleteToo) {
+        if (!isOwned) {
+            return;
+        }
+
         console.log(`-------- DELETING ${name} --------`);
         await drive.files.delete({
             auth: oauth,
@@ -216,48 +244,62 @@ async function transfer(params: TransferParams) {
 
 const PAGE_SIZE = 50;
 
-async function transferFiles() {
+async function transferFiles(ownerEmail: string) {
 
     try {
 
         let driveFiles = await google.drive("v3").files.list({
             auth: oauth,
             pageSize: PAGE_SIZE,
-            fields: 'nextPageToken, files(name, id, webContentLink, parents)',
-            q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false and not mimeType contains 'application/vnd.google-apps'",
+            fields: 'nextPageToken, files(name, id, webContentLink, parents, permissions(emailAddress, role))',
+            q: "trashed=false and not mimeType contains 'application/vnd.google-apps'",
             supportsAllDrives: true,
-            corpora: 'allDrives',
-            includeItemsFromAllDrives: true
+            includeItemsFromAllDrives: true,
         });
 
-        while (driveFiles.data.nextPageToken) {
+        let leftOver = driveFiles.data.files?.length!;
+        // console.log(driveFiles.data.files?.length);
+
+        while (driveFiles.data.nextPageToken || leftOver > 0) {
             const { data: { files } } = driveFiles;
 
             for await (const file of files!) {
                 console.log(`----- UPLOADING ${file.name}... ------`);
                 await transfer({
+                    ownerEmail,
                     file: {
                         id: file.id!,
                         name: file.name!,
                         webContentLink: file.webContentLink!,
-                        parents: file.parents!
-                    }
+                        parents: file.parents!,
+                        permissions: file.permissions!
+                    },
+                    deleteToo: env.DELETE_AFTER_TRANSFER,
                 });
                 console.log(`------ ${file.name} UPLOADED -------`);
             }
 
-            console.log('GETTING ANOTHER FILES....');
-            driveFiles = await google.drive("v3").files.list({
-                auth: oauth,
-                pageSize: PAGE_SIZE,
-                fields: 'nextPageToken, files(name, id, webContentLink, parents)',
-                q: "mimeType != 'application/vnd.google-apps.folder' and trashed=false and not mimeType contains 'application/vnd.google-apps'",
-                pageToken: driveFiles.data.nextPageToken,
-                supportsAllDrives: true,
-                corpora: 'allDrives',
-                includeItemsFromAllDrives: true,
-            });
+            leftOver = 0;
+
+            if (driveFiles.data.nextPageToken) {
+                console.log('GETTING ANOTHER FILES....');
+                driveFiles = await google.drive("v3").files.list({
+                    auth: oauth,
+                    pageSize: PAGE_SIZE,
+                    fields: 'nextPageToken, files(name, id, webContentLink, parents, permissions(type))',
+                    q: "trashed=false and not mimeType contains 'application/vnd.google-apps'",
+                    pageToken: driveFiles.data.nextPageToken!,
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true,
+                });
+
+                console.log(driveFiles.data.files?.length);
+                leftOver = driveFiles.data.files?.length!;
+            }
+
         }
+
+        // console.log({ i });
 
         console.log('ITS OVER...');
 
@@ -270,8 +312,8 @@ async function transferFiles() {
 // Make sure only run this if the 
 // file is run directly (not imported)
 if (import.meta.main) {
-    await ensureToken();
-    await transferFiles();
+    const profile = await ensureToken();
+    await transferFiles(profile.email!);
 
     // await list();
     // await download('https://drive.google.com/uc?id=1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao&export=download');
