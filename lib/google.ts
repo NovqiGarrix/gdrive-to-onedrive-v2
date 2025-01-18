@@ -526,7 +526,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                         chunksToUpload: 50,
                         conflictBehavior: 'replace'
                     }, (bytes) => {
-                        console.log(`--- ${item.filename}: Uploaded ${bytes / 1024 * 1024} MB ---`.toUpperCase());
+                        console.log(`--- ${item.filename}: Uploaded ${bytes / (1024 * 1024)} MB ---`.toUpperCase());
                     });
                 }
 
@@ -543,7 +543,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                     filepath: `Google Photos/${item.filename}`,
                     from: 'GooglePhotos',
                     fileId: item.id,
-                    error: `${error.status} - ${error?.response?.data}` || error
+                    error: error?.message
                 });
                 console.error(error);
             }
@@ -561,12 +561,75 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
 }
 
+async function uploadUnUploadedFiles() {
+
+    const unUploadedFiles: Array<UnUploadedFile> = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+
+    for await (const file of unUploadedFiles) {
+
+        const mediaItemResponse = await fetch(`https://photoslibrary.googleapis.com/v1/mediaItems/${file.fileId}`, {
+            headers: {
+                Authorization: `Bearer ${oauth.credentials.access_token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await mediaItemResponse.json();
+
+        if (!mediaItemResponse.ok) {
+            console.error('Failed to get media item', data);
+        }
+
+        const { filename, baseUrl, isPhoto } = mediaItemSchema.parse(data);
+
+        const downloadUrl = `${baseUrl}=${isPhoto ? 'd' : 'dv'}`;
+
+        const fileSize = await getMediaItemFileSize(downloadUrl);
+
+        const readableStream = await oauth.request({
+            method: 'GET',
+            url: downloadUrl,
+            responseType: 'stream',
+            retry: true,
+        });
+
+        console.log(`------ UPLOADING ${filename}... ------`);
+
+        if (fileSize <= 4 * 1024 * 1024) {
+            await onedrive.items.uploadSimple({
+                readableStream: readableStream.data,
+                accessToken: await microsoftAuth.getAccessToken(),
+                filename,
+                parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+            });
+        } else {
+            console.log(`--- File size: ${fileSize / 1024 / 1024} MB ---`.toUpperCase());
+            await onedrive.items.uploadSession({
+                readableStream: readableStream.data,
+                accessToken: await microsoftAuth.getAccessToken(),
+                filename,
+                parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+                fileSize,
+                chunksToUpload: 50,
+                conflictBehavior: 'replace'
+            }, (bytes) => {
+                console.log(`--- ${filename}: Uploaded ${bytes / (1024 * 1024)} MB ---`.toUpperCase());
+            });
+        }
+
+        console.log(`------ ${filename} UPLOADED ------`);
+
+    }
+
+}
+
 // Make sure only run this if the 
 // file is run directly (not imported)
 if (import.meta.main) {
     const profile = await ensureToken();
     // await transferFiles(profile.email!);
-    await transferFromGooglePhotos();
+    // await transferFromGooglePhotos();
+    await uploadUnUploadedFiles();
 
     // await list();
     // await download('https://drive.google.com/uc?id=1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao&export=download');
