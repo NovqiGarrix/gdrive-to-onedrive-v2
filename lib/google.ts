@@ -406,7 +406,7 @@ interface UploadedFile {
     from: 'GooglePhotos' | 'GoogleDrive' | 'OneDrive';
 }
 
-async function addUploadedFile(file: UploadedFile) {
+async function addUploadedFiles(files: Array<UploadedFile>) {
 
     const existedFiles = new Set<UploadedFile>();
 
@@ -419,7 +419,9 @@ async function addUploadedFile(file: UploadedFile) {
         console.error(error);
     }
 
-    existedFiles.add(file);
+    files.forEach((f) => {
+        existedFiles.add(f);
+    });
 
     try {
         await Deno.writeTextFile('./uploaded.json', JSON.stringify([...existedFiles], null, 2));
@@ -454,17 +456,17 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     const uploadedFiles: Array<UploadedFile> = JSON.parse(await Deno.readTextFile('./uploaded.json'));
 
-    await Promise.all(
+    const newUploadedFiles = (await Promise.all(
         mediaItems.map(async (item) => {
             try {
                 // Check if the file is already uploaded
                 if (await checkIfFileExistsV2(`Google Photos/${item.filename}`, uploadedFiles)) {
                     console.log(`------ ${item.filename} ALREADY EXISTS ------`);
-                    await addUploadedFile({
+                    await addUploadedFiles([{
                         fileId: item.id,
                         from: 'GooglePhotos',
                         filepath: `Google Photos/${item.filename}`
-                    })
+                    }])
                     return;
                 }
 
@@ -489,13 +491,13 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                     parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
                 });
 
-                await addUploadedFile({
+                console.log(`------ ${item.filename} UPLOADED ------`);
+
+                return {
                     fileId: item.id,
                     from: 'GooglePhotos',
                     filepath: `Google Photos/${item.filename}`
-                });
-
-                console.log(`------ ${item.filename} UPLOADED ------`);
+                }
             } catch (error: any) {
                 console.error(`Failed to upload ${item.filename}`, error);
                 await addUnUploadedFile({
@@ -507,7 +509,9 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                 console.error(error);
             }
         })
-    );
+    )).filter(Boolean) as Array<UploadedFile>;
+
+    await addUploadedFiles(newUploadedFiles);
 
     if (!nextPageToken) {
         return;
