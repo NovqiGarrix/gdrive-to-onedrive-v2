@@ -381,8 +381,8 @@ async function addUnUploadedFile(file: UnUploadedFile) {
     const existedFiles = new Set<UnUploadedFile>();
 
     try {
-        const existedFiles = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
-        existedFiles.forEach((f: UnUploadedFile) => {
+        const existedFilesArray = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+        existedFilesArray.forEach((f: UnUploadedFile) => {
             existedFiles.add(f);
         });
     } catch (error) {
@@ -411,8 +411,8 @@ async function addUploadedFile(file: UploadedFile) {
     const existedFiles = new Set<UploadedFile>();
 
     try {
-        const existedFiles = JSON.parse(await Deno.readTextFile('./uploaded.json'));
-        existedFiles.forEach((f: UploadedFile) => {
+        const existedFilesArray = JSON.parse(await Deno.readTextFile('./uploaded.json'));
+        existedFilesArray.forEach((f: UploadedFile) => {
             existedFiles.add(f);
         });
     } catch (error) {
