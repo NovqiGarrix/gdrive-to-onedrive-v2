@@ -322,7 +322,13 @@ async function transferFiles(ownerEmail: string) {
 
 }
 
-async function checkIfFileExistsV2(fullpath: string) {
+async function checkIfFileExistsV2(fullpath: string, uploadedFiles?: Array<UploadedFile>) {
+
+    if (uploadedFiles) {
+        if (uploadedFiles.some((file) => file.filepath === fullpath)) {
+            return true;
+        }
+    }
 
     try {
         await microsoftClient.api(`/me/drive/root:/${ROOT_FOLDER_NAME}/${fullpath}`)
@@ -364,7 +370,7 @@ const googlePhotosMediaItemsResponseSchema = z.object({
 });
 
 interface UnUploadedFile {
-    filename: string;
+    filepath: string;
     fileId: string;
     from: 'GooglePhotos' | 'GoogleDrive' | 'OneDrive'; // GooglePhotos or GoogleDrive or OneDrive
     error: any;
@@ -385,7 +391,35 @@ async function addUnUploadedFile(file: UnUploadedFile) {
     try {
         await Deno.writeTextFile('./unuploaded.json', JSON.stringify(existedFiles, null, 2));
     } catch (error) {
-        throw new Error('Failed to write to file');
+        console.error(error);
+        throw new Error('Failed to add unuploaded file');
+    }
+
+}
+
+interface UploadedFile {
+    filepath: string;
+    fileId: string;
+    from: 'GooglePhotos' | 'GoogleDrive' | 'OneDrive';
+}
+
+async function addUploadedFile(file: UploadedFile) {
+
+    let existedFiles: Array<UploadedFile> = [];
+
+    try {
+        existedFiles = JSON.parse(await Deno.readTextFile('./uploaded.json'));
+    } catch (error) {
+        existedFiles = [];
+    }
+
+    existedFiles.push(file);
+
+    try {
+        await Deno.writeTextFile('./uploaded.json', JSON.stringify(existedFiles, null, 2));
+    } catch (error) {
+        console.error(error);
+        throw new Error('Failed to add uploaded file');
     }
 
 }
@@ -393,7 +427,7 @@ async function addUnUploadedFile(file: UnUploadedFile) {
 async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     const url = new URL('https://photoslibrary.googleapis.com/v1/mediaItems');
-    url.searchParams.set('pageSize', '30');
+    url.searchParams.set('pageSize', '20');
     if (_nextPageToken) {
         url.searchParams.set('pageToken', _nextPageToken);
     }
@@ -412,12 +446,19 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
     const googlePhotosMediaItemsResponse = googlePhotosMediaItemsResponseSchema.parse(await filesResp.json());
     const { mediaItems, nextPageToken } = googlePhotosMediaItemsResponse;
 
+    const uploadedFiles: Array<UploadedFile> = JSON.parse(await Deno.readTextFile('./uploaded.json'));
+
     await Promise.all(
         mediaItems.map(async (item) => {
             try {
                 // Check if the file is already uploaded
-                if (await checkIfFileExistsV2(`Google Photos/${item.filename}`)) {
+                if (await checkIfFileExistsV2(`Google Photos/${item.filename}`, uploadedFiles)) {
                     console.log(`------ ${item.filename} ALREADY EXISTS ------`);
+                    await addUploadedFile({
+                        fileId: item.id,
+                        from: 'GooglePhotos',
+                        filepath: `Google Photos/${item.filename}`
+                    })
                     return;
                 }
 
@@ -445,7 +486,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
             } catch (error: any) {
                 console.error(`Failed to upload ${item.filename}`);
                 await addUnUploadedFile({
-                    filename: item.filename,
+                    filepath: `Google Photos/${item.filename}`,
                     from: 'GooglePhotos',
                     fileId: item.id,
                     error: error?.response || error
