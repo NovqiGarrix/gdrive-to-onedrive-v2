@@ -458,7 +458,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
         mediaItems.map(async (item) => {
             try {
                 // Check if the file is already uploaded
-                if (await checkIfFileExistsV2(`Google Photos/s${item.filename}`, uploadedFiles)) {
+                if (await checkIfFileExistsV2(`Google Photos/${item.filename}`, uploadedFiles)) {
                     console.log(`------ ${item.filename} ALREADY EXISTS ------`);
                     await addUploadedFile({
                         fileId: item.id,
@@ -472,7 +472,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
                 // The 'd' parameter is used to tell Google
                 // that we want to download the file (not viewing it)
-                const downloadUrl = `${item.baseUrl}=s${item.isPhoto ? 'd' : 'dv'}`;
+                const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
                 // console.log(item.isPhoto, item.filename);
 
                 const readableStream = await oauth.request({
