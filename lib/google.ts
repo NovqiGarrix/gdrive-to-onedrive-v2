@@ -392,7 +392,7 @@ async function addUnUploadedFile(file: UnUploadedFile) {
     existedFiles.add(file);
 
     try {
-        await Deno.writeTextFile('./unuploaded.json', JSON.stringify(Array.from(existedFiles.entries()), null, 2));
+        await Deno.writeTextFile('./unuploaded.json', JSON.stringify([...existedFiles], null, 2));
     } catch (error) {
         console.error(error);
         throw new Error('Failed to add unuploaded file');
@@ -422,7 +422,7 @@ async function addUploadedFile(file: UploadedFile) {
     existedFiles.add(file);
 
     try {
-        await Deno.writeTextFile('./uploaded.json', JSON.stringify(Array.from(existedFiles.entries()), null, 2));
+        await Deno.writeTextFile('./uploaded.json', JSON.stringify([...existedFiles], null, 2));
     } catch (error) {
         console.error(error);
         throw new Error('Failed to add uploaded file');
