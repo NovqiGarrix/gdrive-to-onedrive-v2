@@ -605,17 +605,14 @@ async function uploadUnUploadedFiles() {
         } else {
             console.log(`--- File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB ---`.toUpperCase());
 
-            const CHUNK_SIZE = 20 * 1024 * 1024; // 5 MB per chunk
-            const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
-            const chunksToUpload = totalChunks;
-
             await onedrive.items.uploadSession({
                 readableStream: readableStream.data,
                 accessToken: await microsoftAuth.getAccessToken(),
                 filename,
                 parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
                 fileSize,
-                chunksToUpload,
+                // it uploaded 1MB per upload
+                chunksToUpload: Math.ceil(fileSize / (1 * 1024 * 1024)),
                 conflictBehavior: 'replace'
             }, (bytes) => {
                 console.log(`--- ${filename}: Uploaded ${(bytes / (1024 * 1024)).toFixed(2)} MB ---`.toUpperCase());
