@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-unused-vars
+// deno-lint-ignore-file no-unused-vars no-explicit-any
 import { drive_v3, google } from "googleapis";
 import env from "../config/env.ts";
 import { REDIS_GOOGLE_TOKEN_KEY } from "../constant.ts";
@@ -8,6 +8,7 @@ import { getRedisClient, oauth } from "../utils.ts";
 import { MicrosoftAuthenticationProvider } from "./microsoft.ts";
 import onedrive from "./onedrive.ts";
 import { z } from "zod";
+import { microsoftClient } from "./microsoft.ts";
 
 const ROOT_FOLDER_NAME = 'novrianto254v2';
 
@@ -15,7 +16,7 @@ const drive = google.drive("v3");
 // const oauth2 = getAPI('oauth')
 
 const redis = await getRedisClient();
-const microsoftClient = new MicrosoftAuthenticationProvider(redis);
+const microsoftAuth = new MicrosoftAuthenticationProvider(redis);
 
 async function ensureToken() {
     const token = await redis.get(REDIS_GOOGLE_TOKEN_KEY);
@@ -118,9 +119,18 @@ async function getParentPath(fileId: string): Promise<string> {
 }
 
 const ONEDRIVE_PARENT_ID = '01COHAPYWLQJ3QKRKXABB27U6DVV6YQYAC';
+const ONEDRIVE_GOOGLE_PHOTOS_PARENT_ID = '01COHAPYXCMKNQJWYFQJHLC3OIYAZX75UD';
 const GOOGLE_DRIVE_PARENT_ID = '0AAI4RCCtKABSUk9PVA';
 
-async function checkIfFileExists(filename: string, googleParentId?: string) {
+interface CheckIfFileExistsParams {
+    filename: string;
+    googleParentId?: string;
+    oneDriveParentId?: string;
+}
+
+async function checkIfFileExists(params: CheckIfFileExistsParams) {
+
+    const { filename, googleParentId, oneDriveParentId } = params;
 
     let parentPath: string | null = null;
 
@@ -128,7 +138,7 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
         parentPath = await getParent(googleParentId);
     }
 
-    let parentId = ONEDRIVE_PARENT_ID;
+    let parentId = oneDriveParentId ?? ONEDRIVE_PARENT_ID;
 
     if (parentPath) {
         // Find the id of the parent folder
@@ -136,7 +146,7 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
 
         const resp = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${ROOT_FOLDER_NAME}/${parentPath}`, {
             headers: {
-                Authorization: `Bearer ${await microsoftClient.getAccessToken()}`,
+                Authorization: `Bearer ${await microsoftAuth.getAccessToken()}`,
                 'Content-Type': 'application/json'
             }
         });
@@ -158,7 +168,7 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
     url.searchParams.set('select', 'name');
     const resp = await fetch(url, {
         headers: {
-            Authorization: `Bearer ${await microsoftClient.getAccessToken()}`,
+            Authorization: `Bearer ${await microsoftAuth.getAccessToken()}`,
             'Content-Type': 'application/json'
         }
     });
@@ -170,6 +180,7 @@ async function checkIfFileExists(filename: string, googleParentId?: string) {
     }
 
     const { value }: { value: Array<{ name: string }> } = data;
+    console.log(value);
     return value.some((v) => v.name === filename);
 
 }
@@ -194,7 +205,7 @@ async function transfer(params: TransferParams) {
     const insideFolder = parents?.at(0) !== GOOGLE_DRIVE_PARENT_ID;
     const isOwned = !!(permissions && permissions.find((permission) => permission.role === "owner" && permission.emailAddress === ownerEmail));
 
-    if (await checkIfFileExists(name!, insideFolder ? parents?.at(0)! : undefined)) {
+    if (await checkIfFileExists({ filename: name, googleParentId: insideFolder ? parents?.at(0)! : undefined })) {
         console.log(`-------- ${name} ALREADY EXISTS --------`);
 
         if (deleteToo) {
@@ -222,7 +233,7 @@ async function transfer(params: TransferParams) {
     });
 
     const g = await onedrive.items.uploadSimple({
-        accessToken: await microsoftClient.getAccessToken(),
+        accessToken: await microsoftAuth.getAccessToken(),
         filename: name!,
         parentPath: `${ROOT_FOLDER_NAME}/${parentPath}`,
         readableStream: res.data
@@ -311,6 +322,23 @@ async function transferFiles(ownerEmail: string) {
 
 }
 
+async function checkIfFileExistsV2(fullpath: string) {
+
+    try {
+        await microsoftClient.api(`/me/drive/root:/${ROOT_FOLDER_NAME}/${fullpath}`)
+            .select('name')
+            .get();
+
+        return true;
+    } catch (error: any) {
+        if (error.statusCode === 404) {
+            return false;
+        }
+        throw error;
+    }
+
+}
+
 const mediaItemSchema = z.object({
     id: z.string(),
     filename: z.string(),
@@ -335,10 +363,37 @@ const googlePhotosMediaItemsResponseSchema = z.object({
     nextPageToken: z.string().optional()
 });
 
+interface UnUploadedFile {
+    filename: string;
+    fileId: string;
+    from: 'GooglePhotos' | 'GoogleDrive' | 'OneDrive'; // GooglePhotos or GoogleDrive or OneDrive
+    error: any;
+}
+
+async function addUnUploadedFile(file: UnUploadedFile) {
+
+    let existedFiles: Array<UnUploadedFile> = [];
+
+    try {
+        existedFiles = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+    } catch (error) {
+        existedFiles = [];
+    }
+
+    existedFiles.push(file);
+
+    try {
+        await Deno.writeTextFile('./unuploaded.json', JSON.stringify(existedFiles, null, 2));
+    } catch (error) {
+        throw new Error('Failed to write to file');
+    }
+
+}
+
 async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     const url = new URL('https://photoslibrary.googleapis.com/v1/mediaItems');
-    url.searchParams.set('pageSize', '10');
+    url.searchParams.set('pageSize', '30');
     if (_nextPageToken) {
         url.searchParams.set('pageToken', _nextPageToken);
     }
@@ -359,26 +414,44 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     await Promise.all(
         mediaItems.map(async (item) => {
-            console.log(`------ UPLOADING ${item.filename}... ------`);
+            try {
+                // Check if the file is already uploaded
+                if (await checkIfFileExistsV2(`Google Photos/${item.filename}`)) {
+                    console.log(`------ ${item.filename} ALREADY EXISTS ------`);
+                    return;
+                }
 
-            // The 'd' parameter is used to tell Google
-            // that we want to download the file (not viewing it)
-            const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
-            // console.log(item.isPhoto, item.filename);
+                console.log(`------ UPLOADING ${item.filename}... ------`);
 
-            const readableStream = await oauth.request({
-                method: 'GET',
-                url: downloadUrl,
-                responseType: 'stream',
-            });
+                // The 'd' parameter is used to tell Google
+                // that we want to download the file (not viewing it)
+                const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
+                // console.log(item.isPhoto, item.filename);
 
-            await onedrive.items.uploadSimple({
-                readableStream: readableStream.data,
-                accessToken: await microsoftClient.getAccessToken(),
-                filename: item.filename,
-                parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
-            });
-            console.log(`------ ${item.filename} UPLOADED ------`);
+                const readableStream = await oauth.request({
+                    method: 'GET',
+                    url: downloadUrl,
+                    responseType: 'stream',
+                    retry: true
+                });
+
+                await onedrive.items.uploadSimple({
+                    readableStream: readableStream.data,
+                    accessToken: await microsoftAuth.getAccessToken(),
+                    filename: item.filename,
+                    parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+                });
+                console.log(`------ ${item.filename} UPLOADED ------`);
+            } catch (error: any) {
+                console.error(`Failed to upload ${item.filename}`);
+                await addUnUploadedFile({
+                    filename: item.filename,
+                    from: 'GooglePhotos',
+                    fileId: item.id,
+                    error: error?.response || error
+                });
+                console.error(error);
+            }
         })
     );
 
@@ -402,6 +475,9 @@ if (import.meta.main) {
     // await download('https://drive.google.com/uc?id=1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao&export=download');
     // console.log(await getParentPath('1IE-2yeNqnqKkpWZruzZJ-n6k7kfaWgao'));
     // await getParentPath('0AAI4RCCtKABSUk9PVA');
+
+    // Microsoft
+    // await checkIfFileExistsV2('Google Photos/IMG_20240908_161729.jpgs');
 
     Deno.exit(0);
 }
