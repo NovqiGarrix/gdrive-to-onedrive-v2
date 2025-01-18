@@ -378,18 +378,21 @@ interface UnUploadedFile {
 
 async function addUnUploadedFile(file: UnUploadedFile) {
 
-    let existedFiles: Array<UnUploadedFile> = [];
+    const existedFiles = new Set<UnUploadedFile>();
 
     try {
-        existedFiles = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+        const existedFiles = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+        existedFiles.forEach((f: UnUploadedFile) => {
+            existedFiles.add(f);
+        });
     } catch (error) {
-        existedFiles = [];
+        console.error(error);
     }
 
-    existedFiles.push(file);
+    existedFiles.add(file);
 
     try {
-        await Deno.writeTextFile('./unuploaded.json', JSON.stringify(existedFiles, null, 2));
+        await Deno.writeTextFile('./unuploaded.json', JSON.stringify(Array.from(existedFiles.entries()), null, 2));
     } catch (error) {
         console.error(error);
         throw new Error('Failed to add unuploaded file');
@@ -405,18 +408,21 @@ interface UploadedFile {
 
 async function addUploadedFile(file: UploadedFile) {
 
-    let existedFiles: Array<UploadedFile> = [];
+    const existedFiles = new Set<UploadedFile>();
 
     try {
-        existedFiles = JSON.parse(await Deno.readTextFile('./uploaded.json'));
+        const existedFiles = JSON.parse(await Deno.readTextFile('./uploaded.json'));
+        existedFiles.forEach((f: UploadedFile) => {
+            existedFiles.add(f);
+        });
     } catch (error) {
-        existedFiles = [];
+        console.error(error);
     }
 
-    existedFiles.push(file);
+    existedFiles.add(file);
 
     try {
-        await Deno.writeTextFile('./uploaded.json', JSON.stringify(existedFiles, null, 2));
+        await Deno.writeTextFile('./uploaded.json', JSON.stringify(Array.from(existedFiles.entries()), null, 2));
     } catch (error) {
         console.error(error);
         throw new Error('Failed to add uploaded file');
@@ -452,7 +458,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
         mediaItems.map(async (item) => {
             try {
                 // Check if the file is already uploaded
-                if (await checkIfFileExistsV2(`Google Photos/${item.filename}`, uploadedFiles)) {
+                if (await checkIfFileExistsV2(`Google Photos/s${item.filename}`, uploadedFiles)) {
                     console.log(`------ ${item.filename} ALREADY EXISTS ------`);
                     await addUploadedFile({
                         fileId: item.id,
@@ -466,7 +472,7 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
                 // The 'd' parameter is used to tell Google
                 // that we want to download the file (not viewing it)
-                const downloadUrl = `${item.baseUrl}=${item.isPhoto ? 'd' : 'dv'}`;
+                const downloadUrl = `${item.baseUrl}=s${item.isPhoto ? 'd' : 'dv'}`;
                 // console.log(item.isPhoto, item.filename);
 
                 const readableStream = await oauth.request({
@@ -482,14 +488,21 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                     filename: item.filename,
                     parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
                 });
+
+                await addUploadedFile({
+                    fileId: item.id,
+                    from: 'GooglePhotos',
+                    filepath: `Google Photos/${item.filename}`
+                });
+
                 console.log(`------ ${item.filename} UPLOADED ------`);
             } catch (error: any) {
-                console.error(`Failed to upload ${item.filename}`);
+                console.error(`Failed to upload ${item.filename}`, error);
                 await addUnUploadedFile({
                     filepath: `Google Photos/${item.filename}`,
                     from: 'GooglePhotos',
                     fileId: item.id,
-                    error: error?.response || error
+                    error: `${error.status} - ${error?.response?.data}` || error
                 });
                 console.error(error);
             }
