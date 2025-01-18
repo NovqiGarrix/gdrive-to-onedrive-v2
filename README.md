@@ -8,7 +8,7 @@ Overall, the program is already working. You can transfer files from google driv
 - [x] Setup google authentication
 - [x] Setup microsoft authentication
 - [x] Transfer file(s) from google drive to one drive
-- [ ] Add support delete file after transfer
+- [x] Add support delete file after transfer
 
 ## Limitations
 1. Shared with me files in google drive are not supported yet.
