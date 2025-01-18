@@ -603,17 +603,22 @@ async function uploadUnUploadedFiles() {
                 parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
             });
         } else {
-            console.log(`--- File size: ${fileSize / 1024 / 1024} MB ---`.toUpperCase());
+            console.log(`--- File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB ---`.toUpperCase());
+
+            const CHUNK_SIZE = 20 * 1024 * 1024; // 5 MB per chunk
+            const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+            const chunksToUpload = totalChunks;
+
             await onedrive.items.uploadSession({
                 readableStream: readableStream.data,
                 accessToken: await microsoftAuth.getAccessToken(),
                 filename,
                 parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
                 fileSize,
-                chunksToUpload: 50,
+                chunksToUpload,
                 conflictBehavior: 'replace'
             }, (bytes) => {
-                console.log(`--- ${filename}: Uploaded ${bytes / (1024 * 1024)} MB ---`.toUpperCase());
+                console.log(`--- ${filename}: Uploaded ${(bytes / (1024 * 1024)).toFixed(2)} MB ---`.toUpperCase());
             });
         }
 
