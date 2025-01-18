@@ -561,6 +561,29 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
 
 }
 
+async function removeUnUploadedFile(fileId: string) {
+
+    const existedFiles = new Set<UnUploadedFile>();
+
+    try {
+        const existedFilesArray = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
+        existedFilesArray.forEach((f: UnUploadedFile) => {
+            if (f.fileId !== fileId) {
+                existedFiles.add(f);
+            }
+        });
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        await Deno.writeTextFile('./unuploaded.json', JSON.stringify([...existedFiles], null, 2));
+    } catch (error) {
+        console.error(error);
+        throw new Error('Failed to remove unuploaded file');
+    }
+}
+
 async function uploadUnUploadedFiles() {
 
     const unUploadedFiles: Array<UnUploadedFile> = JSON.parse(await Deno.readTextFile('./unuploaded.json'));
@@ -618,6 +641,8 @@ async function uploadUnUploadedFiles() {
                 console.log(`--- ${filename}: Uploaded ${(bytes / (1024 * 1024)).toFixed(2)} MB ---`.toUpperCase());
             });
         }
+
+        await removeUnUploadedFile(file.fileId);
 
         console.log(`------ ${filename} UPLOADED ------`);
 
