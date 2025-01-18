@@ -432,6 +432,27 @@ async function addUploadedFiles(files: Array<UploadedFile>) {
 
 }
 
+async function getMediaItemFileSize(downloadUrl: string) {
+    const resp = await fetch(downloadUrl, {
+        method: 'HEAD',
+        redirect: 'follow',
+        headers: {
+            Authorization: `Bearer ${oauth.credentials.access_token}`
+        },
+    });
+
+    if (!resp.ok) {
+        throw new Error('Failed to get file size');
+    }
+
+    const contentLength = resp.headers.get('content-length');
+    if (!contentLength) {
+        throw new Error('Failed to get content length');
+    }
+
+    return Number(contentLength);
+}
+
 async function transferFromGooglePhotos(_nextPageToken?: string) {
 
     const url = new URL('https://photoslibrary.googleapis.com/v1/mediaItems');
@@ -480,15 +501,34 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                     method: 'GET',
                     url: downloadUrl,
                     responseType: 'stream',
-                    retry: true
+                    retry: true,
+
                 });
 
-                await onedrive.items.uploadSimple({
-                    readableStream: readableStream.data,
-                    accessToken: await microsoftAuth.getAccessToken(),
-                    filename: item.filename,
-                    parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
-                });
+                const fileSize = await getMediaItemFileSize(downloadUrl);
+
+                // If file size is less than 4MB, use simple upload
+                if (fileSize < 4 * 1024 * 1024) {
+                    await onedrive.items.uploadSimple({
+                        readableStream: readableStream.data,
+                        accessToken: await microsoftAuth.getAccessToken(),
+                        filename: item.filename,
+                        parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+                    });
+                } else {
+                    console.log(`--- File size: ${fileSize / 1024 / 1024} MB ---`.toUpperCase());
+                    await onedrive.items.uploadSession({
+                        readableStream: readableStream.data,
+                        accessToken: await microsoftAuth.getAccessToken(),
+                        filename: item.filename,
+                        parentPath: `${ROOT_FOLDER_NAME}/Google Photos`,
+                        fileSize,
+                        chunksToUpload: 50,
+                        conflictBehavior: 'replace'
+                    }, (bytes) => {
+                        console.log(`--- ${item.filename}: Uploaded ${bytes / 1024 * 1024} MB ---`.toUpperCase());
+                    });
+                }
 
                 console.log(`------ ${item.filename} UPLOADED ------`);
 

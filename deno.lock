@@ -7,6 +7,7 @@
     "jsr:@std/internal@^1.0.5": "1.0.5",
     "npm:@microsoft/microsoft-graph-client@^3.0.7": "3.0.7",
     "npm:@microsoft/microsoft-graph-types@^2.40.0": "2.40.0",
+    "npm:@types/node@*": "22.5.4",
     "npm:googleapis-common@^7.2.0": "7.2.0",
     "npm:googleapis@144": "144.0.0",
     "npm:ioredis@^5.4.2": "5.4.2",
@@ -61,6 +62,12 @@
     },
     "@types/http-cache-semantics@4.0.4": {
       "integrity": "sha512-1m0bIFVc7eJWyve9S0RnuRgcQqF/Xd5QsUZAZeQFr1Q3/p9JWoQQEqmVy+DPTNpGXwhgIetAoYF8JSc33q29QA=="
+    },
+    "@types/node@22.5.4": {
+      "integrity": "sha512-FDuKUJQm/ju9fT/SeX/6+gBzoPzlVCzfzmGkwKvRHQVxi4BntVbyIwf6a4Xn62mrvndLiml6z/UBXIdEVjQLXg==",
+      "dependencies": [
+        "undici-types"
+      ]
     },
     "agent-base@7.1.3": {
       "integrity": "sha512-jRR5wdylq8CkOe6hei19GGZnxM6rBGwFl3Bg0YItGDimvjGtAvdZk4Pu6Cl4u4Igsws4a1fd1Vq3ezrhn4KmFw=="
@@ -453,6 +460,9 @@
     },
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
+    },
+    "undici-types@6.19.8": {
+      "integrity": "sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw=="
     },
     "url-template@2.0.8": {
       "integrity": "sha512-XdVKMF4SJ0nP/O7XIPB0JwAEuT9lDIYnNsK8yGVe43y0AWoKeJNdv3ZNWh7ksJ6KqQFjOO6ox/VEitLnaVNufw=="
