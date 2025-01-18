@@ -462,12 +462,11 @@ async function transferFromGooglePhotos(_nextPageToken?: string) {
                 // Check if the file is already uploaded
                 if (await checkIfFileExistsV2(`Google Photos/${item.filename}`, uploadedFiles)) {
                     console.log(`------ ${item.filename} ALREADY EXISTS ------`);
-                    await addUploadedFiles([{
+                    return {
                         fileId: item.id,
                         from: 'GooglePhotos',
                         filepath: `Google Photos/${item.filename}`
-                    }])
-                    return;
+                    }
                 }
 
                 console.log(`------ UPLOADING ${item.filename}... ------`);
